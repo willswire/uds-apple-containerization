@@ -6,7 +6,6 @@ on:
       - main
 
 jobs:
-  
   # Run standard build tests first
   run-build-test:
     uses: ./.github/workflows/build-test.yaml
@@ -14,17 +13,10 @@ jobs:
       id-token: write
       contents: read
 
-  # Run airgap build tests
-  run-airgap-build-test:
-    uses: ./.github/workflows/airgap-build-test.yaml
-    permissions:
-      id-token: write
-      contents: read
-
   # Only proceed to tag a new version if all tests pass
   tag-new-version:
     permissions: write-all
-    needs: [run-build-test, run-airgap-build-test]
+    needs: [run-build-test]
     runs-on: ubuntu-latest
     outputs:
       release_created: ${{ steps.release-flag.outputs.release_created }}
@@ -40,12 +32,11 @@ jobs:
   publish-uds-package:
     needs: tag-new-version
     if: ${{ needs.tag-new-version.outputs.release_created == 'true'}}
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     strategy:
       matrix:
         architecture:
           - arm64
-          - amd64
 
     permissions:
       contents: read
@@ -63,23 +54,14 @@ jobs:
 
       - name: Environment setup
         run: |
-            echo "MARU_AUTH=\"{\"raw.githubusercontent.com\": \"${{ secrets.GITHUB_TOKEN }}\"}\"" >> "GITHUB_ENV"
-            uds run actions:setup-environment \
-            --set GH_TOKEN="${{ secrets.GITHUB_TOKEN }}"
+          echo "MARU_AUTH=\"{\"raw.githubusercontent.com\": \"${{ secrets.GITHUB_TOKEN }}\"}\"" >> "GITHUB_ENV"
+          uds run actions:setup-environment \
+          --set GH_TOKEN="${{ secrets.GITHUB_TOKEN }}"
         shell: bash
 
-      - name: Download Airgap Package Artifact
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
-        with:
-          name: airgap-package-${{ matrix.architecture }}
-          path: ./airgap-package
-      - name: Download Standard Package Artifact
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
-        with:
-          name: package-${{ matrix.architecture }}
-          path: ./standard-package
+      - name: Build the package
+        run: uds run build --set ARCH=${{ matrix.architecture }} --no-progress
 
-      - name: Publish the packages
+      - name: Publish the package
         run: |
-          uds zarf package publish ./airgap-package/zarf-package-uds-k3d-${{ matrix.architecture }}-*.tar.zst oci://ghcr.io/defenseunicorns/packages
-          uds zarf package publish ./standard-package/zarf-package-uds-k3d-${{ matrix.architecture }}-*.tar.zst oci://ghcr.io/defenseunicorns/packages
+          uds zarf package publish ./zarf-package-uds-apple-containerization-${{ matrix.architecture }}-*.tar.zst oci://ghcr.io/willswire/packages

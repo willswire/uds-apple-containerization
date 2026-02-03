@@ -1,22 +1,16 @@
 # Port Configuration
 
-By default, `uds-k3d` will only expose ports `80` and `443` through `k3d` with a redirect from `80` to `443` within the Nginx configuration. The works for most packages however some may require additional TCP ports to be opened in order to provide / test all of their functionality.  To do so you can override the following:
+By default, this package exposes ports `80` and `443` with a redirect from `80` to `443` within the Nginx configuration. This works for most packages however some may require additional TCP ports to be opened in order to provide / test all of their functionality.
 
-## K3d Override
+## Exposing Extra Ports
 
-First set (or add to) `K3D_EXTRA_ARGS` to include all of the ports that you would like to expose:
-
-```bash
---set K3D_EXTRA_ARGS="-p <port>:<port>@server:* -p 9999:9999@server:*"
-```
-
-## Nginx Configuration
-
-Then allow the ports to pass through Nginx by setting `NGINX_EXTRA_PORTS`:
+Set `NGINX_EXTRA_PORTS` to include all of the additional ports you would like to expose:
 
 ```bash
 --set NGINX_EXTRA_PORTS="[<port>,9999]"
 ```
+
+The package automatically handles both the container port forwarding and the Nginx configuration — no separate arguments are needed.
 
 > [!IMPORTANT]
 > This configuration only supports forwarding traffic exposed over the `tenant` gateway in `uds-core` - if you need to expose traffic over another gateway this configuration will not work.

@@ -91,7 +91,7 @@ Please see the Minio chart's [values](https://github.com/minio/minio/blob/master
 
 ## Configuring Minio in a Bundle
 
-If you are building a uds bundle and are using uds-k3d as a base for that bundle, you might want to configure the bundle to be able to customize the minio deployment either at bundle create or deploy time.
+If you are building a uds bundle and are using this package as a base for that bundle, you might want to configure the bundle to be able to customize the minio deployment either at bundle create or deploy time.
 
 ### Configure Create Time Minio Overrides
 
@@ -103,8 +103,8 @@ This example will override the default users and buckets provisioned in the mini
 # uds-bundle.yaml
 
 packages:
-  - name: uds-k3d-dev
-    repository: ghcr.io/defenseunicorns/packages/uds-k3d
+  - name: uds-apple-containerization-dev
+    repository: ghcr.io/willswire/packages/uds-apple-containerization
     ref: 0.2.0
     overrides:
       uds-dev-stack:
@@ -134,8 +134,8 @@ This example will show how to expose the ability to override the default users, 
 # uds-bundle.yaml
 
 packages:
-  - name: uds-k3d-dev
-    repository: ghcr.io/defenseunicorns/packages/uds-k3d
+  - name: uds-apple-containerization-dev
+    repository: ghcr.io/willswire/packages/uds-apple-containerization
     ref: 0.2.0
     overrides:
       uds-dev-stack:
@@ -161,7 +161,7 @@ Once the bundle has been created the deployer can customize the resources deploy
 bundle:
   deploy:
     zarf-packages:
-      uds-k3d-dev:
+      uds-apple-containerization-dev:
         set:
           buckets:
             - name: "myfavoritebucket"
