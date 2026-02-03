@@ -75,8 +75,8 @@ jobs:
 
       - name: Install container CLI
         run: |
-          yes | brew install container
-          container system start
+          brew install container
+          container system start --enable-kernel-install
         shell: bash
 
       - name: Registry login

@@ -21,9 +21,9 @@ passthrough:
     # - myothersubdomain
 images:
   nginx:
-    repository: quay.io/nginx/nginx-unprivileged
-    # renovate: datasource=docker depName=quay.io/nginx/nginx-unprivileged versioning=docker
-    tag: "1.29.3-alpine"
+    repository: docker.io/library/nginx
+    # renovate: datasource=docker depName=docker.io/library/nginx versioning=docker
+    tag: "1.27.4-alpine"
   busybox:
     repository: cgr.dev/chainguard/busybox
     tag: "latest"
