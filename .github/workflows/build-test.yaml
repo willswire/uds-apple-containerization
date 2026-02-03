@@ -27,7 +27,7 @@ permissions:
 
 jobs:
   build-package:
-    runs-on: macos-latest
+    runs-on: macos-26
     strategy:
       matrix:
         architecture: [arm64]
@@ -40,11 +40,9 @@ jobs:
           # renovate: datasource=github-tags depName=defenseunicorns/uds-cli versioning=semver
           version: v0.27.21
 
-      - name: Environment setup
+      - name: Registry login
         run: |
-          echo "MARU_AUTH=\"{\"raw.githubusercontent.com\": \"${{ secrets.GITHUB_TOKEN }}\"}\"" >> "GITHUB_ENV"
-          uds run actions:setup-environment \
-          --set GH_TOKEN="${{ secrets.GITHUB_TOKEN }}"
+          echo "${{ secrets.GITHUB_TOKEN }}" | uds zarf tools registry login -u dummy --password-stdin ghcr.io
         shell: bash
 
       - name: Create package
@@ -58,7 +56,7 @@ jobs:
           retention-days: 1
 
   test-clean-install:
-    runs-on: macos-latest
+    runs-on: macos-26
     needs: build-package
     strategy:
       matrix:
@@ -75,10 +73,15 @@ jobs:
           # renovate: datasource=github-tags depName=defenseunicorns/uds-cli versioning=semver
           version: v0.27.21
 
-      - name: Environment setup
+      - name: Install container CLI
         run: |
-          uds run actions:setup-environment \
-          --set GH_TOKEN="${{ secrets.GITHUB_TOKEN }}"
+          yes | brew install container
+          container system start
+        shell: bash
+
+      - name: Registry login
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | uds zarf tools registry login -u dummy --password-stdin ghcr.io
         shell: bash
 
       - name: Download Package Artifact

@@ -37,8 +37,7 @@ After deployment, the container IP is printed. Use it to set up the redirect:
 
 ```bash
 # Replace NODE_IP with the container IP shown after deployment (e.g. 192.168.64.10)
-echo "rdr pass on lo0 inet proto tcp from any to 127.0.0.1 port 80 -> NODE_IP port 80
-rdr pass on lo0 inet proto tcp from any to 127.0.0.1 port 443 -> NODE_IP port 443" | sudo pfctl -a com.apple/uds -f - -E
+printf 'rdr pass on lo0 inet proto tcp from any to 127.0.0.1 port 80 -> NODE_IP port 80\nrdr pass on lo0 inet proto tcp from any to 127.0.0.1 port 443 -> NODE_IP port 443\n' | sudo pfctl -a com.apple/uds -f - -E
 ```
 
 To remove the redirect rules:

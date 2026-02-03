@@ -125,9 +125,8 @@ components:
               echo "  HTTP/HTTPS:   http://${NODE_IP} / https://${NODE_IP}"
               echo "  Kubeconfig:   ~/.kube/config"
               echo
-              echo "To route *.uds.dev to this cluster, set up pf redirect rules:"
-              echo "  echo \"rdr pass on lo0 inet proto tcp from any to 127.0.0.1 port 80 -> ${NODE_IP} port 80"
-              echo "  rdr pass on lo0 inet proto tcp from any to 127.0.0.1 port 443 -> ${NODE_IP} port 443\" | sudo pfctl -a com.apple/uds -f - -E"
+              echo "To route *.uds.dev to this cluster, run:"
+              echo "  printf 'rdr pass on lo0 inet proto tcp from any to 127.0.0.1 port 80 -> ${NODE_IP} port 80\nrdr pass on lo0 inet proto tcp from any to 127.0.0.1 port 443 -> ${NODE_IP} port 443\n' | sudo pfctl -a com.apple/uds -f - -E"
               echo
               echo "Destroy with: container rm -f ${NODE_NAME}"
             description: "Print cluster access information"
