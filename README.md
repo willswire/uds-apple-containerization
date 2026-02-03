@@ -31,23 +31,24 @@ This package is published via CI, but can be created locally with the following 
 
 ## Routing `*.uds.dev` to the Cluster
 
-`*.uds.dev` resolves to `127.0.0.1` via public DNS. Since the `container` CLI cannot bind to privileged ports (< 1024) on localhost, macOS `pf` redirect rules are needed to route traffic from `127.0.0.1:80`/`443` to the container's IP. This enables seamless browser access for Istio SNI-based routing.
+`*.uds.dev` resolves to `127.0.0.1` via public DNS. To route this traffic to the cluster for Istio SNI-based routing, use `socat` to forward ports 80 and 443 from localhost to the container's IP.
 
-After deployment, the container IP is printed. Use it to set up the redirect:
+After deployment, the container IP is printed. Use it to start the forwarders:
 
 ```bash
-# Replace NODE_IP with the container IP shown after deployment (e.g. 192.168.64.10)
-printf 'rdr pass on lo0 inet proto tcp from any to 127.0.0.1 port 80 -> NODE_IP port 80\nrdr pass on lo0 inet proto tcp from any to 127.0.0.1 port 443 -> NODE_IP port 443\n' | sudo pfctl -a com.apple/uds -f - -E
+# Replace NODE_IP with the container IP shown after deployment (e.g. 192.168.64.18)
+sudo socat TCP-LISTEN:443,bind=127.0.0.1,reuseaddr,fork TCP:NODE_IP:443 &
+sudo socat TCP-LISTEN:80,bind=127.0.0.1,reuseaddr,fork TCP:NODE_IP:80 &
 ```
 
-To remove the redirect rules:
+To stop the forwarders:
 
 ```bash
-sudo pfctl -a com.apple/uds -F all
+sudo killall socat
 ```
 
 > [!NOTE]
-> The redirect rules persist until reboot or manual removal. They do not need to be re-applied after `container stop`/`start`, only after `container rm` and re-deploy (since the container IP may change).
+> Install socat with `brew install socat` if not already available. The forwarders must be restarted after `container rm` and re-deploy (since the container IP may change).
 
 ## Remove
 

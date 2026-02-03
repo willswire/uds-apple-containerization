@@ -5,8 +5,6 @@ variables:
     default: "docker.io/kindest/node"
   - name: NGINX_EXTRA_PORTS
     default: "[]"
-  - name: ARCH
-    default: "${UDS_ARCH}"
 
 tasks:
   - name: default
@@ -20,14 +18,14 @@ tasks:
     description: "Build uds-apple-containerization"
     actions:
       - description: "Build UDS Apple Containerization package"
-        cmd: "uds zarf package create -a ${ARCH} --confirm --skip-sbom"
+        cmd: "uds zarf package create -a arm64 --confirm --skip-sbom"
 
   - name: deploy
     description: "Deploy uds-apple-containerization package"
     actions:
       - description: "Deploy UDS Apple Containerization package"
         cmd: |
-          uds zarf package deploy zarf-package-uds-apple-containerization-${ARCH}-*.tar.zst \
+          uds zarf package deploy zarf-package-uds-apple-containerization-arm64-*.tar.zst \
             --set NODE_IMAGE=${IMAGE_NAME}:${VERSION} \
             --set NGINX_EXTRA_PORTS="${NGINX_EXTRA_PORTS}" \
             --confirm

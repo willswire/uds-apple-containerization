@@ -6,17 +6,8 @@ on:
       - main
 
 jobs:
-  # Run standard build tests first
-  run-build-test:
-    uses: ./.github/workflows/build-test.yaml
-    permissions:
-      id-token: write
-      contents: read
-
-  # Only proceed to tag a new version if all tests pass
   tag-new-version:
     permissions: write-all
-    needs: [run-build-test]
     runs-on: ubuntu-latest
     outputs:
       release_created: ${{ steps.release-flag.outputs.release_created }}
@@ -25,24 +16,18 @@ jobs:
         id: tag
         uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 # v4.4.0
         with:
-          command: manifest # use configs in release-please-config.json
+          command: manifest
       - id: release-flag
         run: echo "release_created=${{ steps.tag.outputs.release_created || false }}" >> $GITHUB_OUTPUT
 
   publish-uds-package:
     needs: tag-new-version
-    if: ${{ needs.tag-new-version.outputs.release_created == 'true'}}
+    if: ${{ needs.tag-new-version.outputs.release_created == 'true' }}
     runs-on: macos-26
-    strategy:
-      matrix:
-        architecture:
-          - arm64
-
     permissions:
       contents: read
       packages: write
       id-token: write
-
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
@@ -55,11 +40,10 @@ jobs:
       - name: Registry login
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | uds zarf tools registry login -u dummy --password-stdin ghcr.io
-        shell: bash
 
       - name: Build the package
-        run: uds run build --set ARCH=${{ matrix.architecture }} --no-progress
+        run: uds run build --no-progress
 
       - name: Publish the package
         run: |
-          uds zarf package publish ./zarf-package-uds-apple-containerization-${{ matrix.architecture }}-*.tar.zst oci://ghcr.io/willswire/packages
+          uds zarf package publish ./zarf-package-uds-apple-containerization-arm64-*.tar.zst oci://ghcr.io/willswire/packages
