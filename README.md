@@ -39,8 +39,8 @@ After deployment, the container IP is printed (you can also use `container list`
 ```bash
 # Replace NODE_IP with the container IP shown after deployment (e.g. 192.168.64.18)
 sudo true;
-sudo socat TCP-LISTEN:443,bind=127.0.0.1,reuseaddr,fork TCP:NODE_IP:443 &
-sudo socat TCP-LISTEN:80,bind=127.0.0.1,reuseaddr,fork TCP:NODE_IP:80 &
+sudo socat TCP-LISTEN:443,bind=127.0.0.1,reuseaddr,fork TCP:192.168.64.4:443 &
+sudo socat TCP-LISTEN:80,bind=127.0.0.1,reuseaddr,fork TCP:192.168.64.4:80 &
 ```
 
 To stop the forwarders:

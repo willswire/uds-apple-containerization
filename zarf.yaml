@@ -113,11 +113,24 @@ components:
               container exec "${NODE_NAME}" kubectl taint nodes --all node-role.kubernetes.io/control-plane- || true
 
               # Extract kubeconfig (no container cp exists yet)
-              mkdir -p ~/.kube
-              container exec "${NODE_NAME}" cat /etc/kubernetes/admin.conf > ~/.kube/config
+              KUBECONFIG_RAW="$(mktemp)"
+              container exec "${NODE_NAME}" cat /etc/kubernetes/admin.conf > "${KUBECONFIG_RAW}"
 
               # Patch kubeconfig server address to use forwarded port
-              sed -i '' "s|server: https://.*:6443|server: https://127.0.0.1:${ZARF_VAR_API_PORT}|" ~/.kube/config
+              sed -i '' "s|server: https://.*:6443|server: https://127.0.0.1:${ZARF_VAR_API_PORT}|" "${KUBECONFIG_RAW}"
+
+              # Append kubeconfig instead of clobbering
+              KUBECONFIG_PATHS="${KUBECONFIG:-$HOME/.kube/config}"
+              TARGET_KUBECONFIG="${KUBECONFIG_PATHS%%:*}"
+              mkdir -p "$(dirname "${TARGET_KUBECONFIG}")"
+
+              printf "\n" >> "${TARGET_KUBECONFIG}" || true
+              cat "${KUBECONFIG_RAW}" >> "${TARGET_KUBECONFIG}"
+
+              CONTEXT_ID="$(./zarf tools kubectl --kubeconfig "${KUBECONFIG_RAW}" config current-context)"
+              KUBECONFIG="${TARGET_KUBECONFIG}" ./zarf tools kubectl config use-context "${CONTEXT_ID}"
+
+              rm -f "${KUBECONFIG_RAW}"
             description: "Create the cluster"
         onSuccess:
           - wait:
@@ -130,13 +143,15 @@ components:
           - cmd: |
               NODE_NAME="${ZARF_VAR_CLUSTER_NAME}-control-plane"
               NODE_IP=$(container inspect "${NODE_NAME}" 2>/dev/null | grep -o '"ipv4Address":"[^"]*"' | head -1 | cut -d'"' -f4 | cut -d'/' -f1)
+              KUBECONFIG_PATHS="${KUBECONFIG:-$HOME/.kube/config}"
+              TARGET_KUBECONFIG="${KUBECONFIG_PATHS%%:*}"
               echo
               echo "Cluster is ready!"
               echo
               echo "  Node IP:      ${NODE_IP}"
               echo "  API server:   https://127.0.0.1:${ZARF_VAR_API_PORT}"
               echo "  HTTP/HTTPS:   http://${NODE_IP} / https://${NODE_IP}"
-              echo "  Kubeconfig:   ~/.kube/config"
+              echo "  Kubeconfig:   ${TARGET_KUBECONFIG}"
               echo
               echo "To route *.uds.dev to this cluster (requires socat):"
               echo "  sudo socat TCP-LISTEN:443,bind=127.0.0.1,reuseaddr,fork TCP:${NODE_IP}:443 &"

@@ -16,10 +16,16 @@ tasks:
       - task: validate
 
   - name: build-kernel
-    description: "Build the custom Linux kernel"
+    description: "Build the custom Linux kernel if it does not exist"
     actions:
-      - description: "Build kernel from containerization submodule"
-        cmd: make -C containerization/kernel
+      - description: "Check for existing kernel build"
+        cmd: |
+          if [ -d containerization/kernel ]; then
+            echo "Kernel build found. Skipping build..."
+          else
+            echo "Kernel build not found! Building..."
+            make -C containerization/kernel
+          fi
 
   - name: build
     description: "Build uds-apple-containerization"
