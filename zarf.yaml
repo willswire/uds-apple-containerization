@@ -68,6 +68,12 @@ components:
                 echo "See: https://github.com/apple/containerization"
                 exit 1
               fi
+              REQUIRED="0.8.0"
+              CURRENT=$(container --version | awk '{print $NF}')
+              if [ "$(printf '%s\n' "${REQUIRED}" "${CURRENT}" | sort -V | head -n1)" != "${REQUIRED}" ]; then
+                echo "container CLI version ${REQUIRED} or later is required (found ${CURRENT})"
+                exit 1
+              fi
             description: "Check container CLI availability"
           - cmd: |
               NODE_NAME="${ZARF_VAR_CLUSTER_NAME}-control-plane"
