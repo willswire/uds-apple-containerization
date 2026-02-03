@@ -34,13 +34,14 @@ uds deploy --confirm uds-bundle-core-slim-dev-arm64-0.60.1.tar.zst
 
 `*.uds.dev` resolves to `127.0.0.1` via public DNS. To route this traffic to the cluster for Istio SNI-based routing, use `socat` to forward ports 80 and 443 from localhost to the container's IP.
 
-After deployment, the container IP is printed (you can also use `container list` to get the IP). Use it to start the forwarders:
+After deployment, you can dynamically fetch the container IP and start the forwarders like this:
 
 ```bash
-# Replace NODE_IP with the container IP shown after deployment (e.g. 192.168.64.18)
+NODE_IP="$(container list --format json | jq -r '.[] | select(.configuration.id=="uds-control-plane") | .networks[0].ipv4Address | split("/")[0]')"
+
 sudo true;
-sudo socat TCP-LISTEN:443,bind=127.0.0.1,reuseaddr,fork TCP:192.168.64.4:443 &
-sudo socat TCP-LISTEN:80,bind=127.0.0.1,reuseaddr,fork TCP:192.168.64.4:80 &
+sudo socat TCP-LISTEN:443,bind=127.0.0.1,reuseaddr,fork TCP:${NODE_IP}:443 &
+sudo socat TCP-LISTEN:80,bind=127.0.0.1,reuseaddr,fork TCP:${NODE_IP}:80 &
 ```
 
 To stop the forwarders:
