@@ -46,14 +46,6 @@ variables:
     description: "Kubernetes API server port for the cluster"
     default: "6443"
 
-  - name: HTTP_PORT
-    description: "HTTP port mapping on the host (maps to port 80 inside the container)"
-    default: "8080"
-
-  - name: HTTPS_PORT
-    description: "HTTPS port mapping on the host (maps to port 443 inside the container)"
-    default: "8443"
-
 components:
   - name: destroy-cluster
     required: true
@@ -80,25 +72,9 @@ components:
           - cmd: |
               NODE_NAME="${ZARF_VAR_CLUSTER_NAME}-control-plane"
 
-              # Build extra port flags from NGINX_EXTRA_PORTS
-              EXTRA_PORT_FLAGS=""
-              for port in $(echo "${ZARF_VAR_NGINX_EXTRA_PORTS}" | tr -d '[]' | tr ',' ' '); do
-                if [ -n "$port" ]; then
-                  EXTRA_PORT_FLAGS="${EXTRA_PORT_FLAGS} -p 127.0.0.1:${port}:${port}"
-                fi
-              done
-
-              # Build port flags for HTTP/HTTPS
-              HTTP_PORT_FLAG=""
-              if [ -n "${ZARF_VAR_HTTP_PORT}" ]; then
-                HTTP_PORT_FLAG="-p 127.0.0.1:${ZARF_VAR_HTTP_PORT}:80"
-              fi
-              HTTPS_PORT_FLAG=""
-              if [ -n "${ZARF_VAR_HTTPS_PORT}" ]; then
-                HTTPS_PORT_FLAG="-p 127.0.0.1:${ZARF_VAR_HTTPS_PORT}:443"
-              fi
-
               # Run the kindest/node container
+              # HTTP/HTTPS (80/443) are accessed directly via the container IP
+              # Only the API port is forwarded to localhost
               container run \
                 -d \
                 --name "${NODE_NAME}" \
@@ -106,9 +82,6 @@ components:
                 -c ${ZARF_VAR_CPUS} \
                 -e KUBECONFIG=/etc/kubernetes/admin.conf \
                 -p 127.0.0.1:${ZARF_VAR_API_PORT}:6443 \
-                ${HTTP_PORT_FLAG} \
-                ${HTTPS_PORT_FLAG} \
-                ${EXTRA_PORT_FLAGS} \
                 ${ZARF_VAR_NODE_IMAGE}
 
               # Enable IP forwarding (container run lacks --sysctl)
@@ -142,14 +115,22 @@ components:
                 namespace: kube-system
             description: "Wait for CoreDNS to be ready"
           - cmd: |
-              echo "You can access this cluster over SSH:"
-              echo "ssh -N -L ${ZARF_VAR_HTTP_PORT}:localhost:${ZARF_VAR_HTTP_PORT} -L ${ZARF_VAR_HTTPS_PORT}:localhost:${ZARF_VAR_HTTPS_PORT} -L ${ZARF_VAR_API_PORT}:localhost:${ZARF_VAR_API_PORT} user@remote-host"
+              NODE_NAME="${ZARF_VAR_CLUSTER_NAME}-control-plane"
+              NODE_IP=$(container inspect "${NODE_NAME}" 2>/dev/null | grep -o '"ipv4Address":"[^"]*"' | head -1 | cut -d'"' -f4 | cut -d'/' -f1)
               echo
-              echo "Kubeconfig is at: ~/.kube/config"
+              echo "Cluster is ready!"
               echo
-              echo "This cluster can be destroyed with:"
-              echo "container rm -f ${ZARF_VAR_CLUSTER_NAME}-control-plane"
-            description: "Print out information about how to access the cluster remotely"
+              echo "  Node IP:      ${NODE_IP}"
+              echo "  API server:   https://127.0.0.1:${ZARF_VAR_API_PORT}"
+              echo "  HTTP/HTTPS:   http://${NODE_IP} / https://${NODE_IP}"
+              echo "  Kubeconfig:   ~/.kube/config"
+              echo
+              echo "To route *.uds.dev to this cluster, set up pf redirect rules:"
+              echo "  echo \"rdr pass on lo0 inet proto tcp from any to 127.0.0.1 port 80 -> ${NODE_IP} port 80"
+              echo "  rdr pass on lo0 inet proto tcp from any to 127.0.0.1 port 443 -> ${NODE_IP} port 443\" | sudo pfctl -a com.apple/uds -f - -E"
+              echo
+              echo "Destroy with: container rm -f ${NODE_NAME}"
+            description: "Print cluster access information"
 
   - name: uds-dev-stack
     required: true
