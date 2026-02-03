@@ -175,8 +175,6 @@ components:
                 }
               ]'
             description: "Mount coredns-custom configmap into CoreDNS pods"
-          - cmd: ./zarf tools kubectl rollout restart deployment coredns -n kube-system
-            description: "Restart CoreDNS to pick up internal DNS override for uds.dev"
           - cmd: ./zarf tools kubectl rollout status deployment coredns -n kube-system --timeout=60s
             description: "Wait for CoreDNS rollout to complete"
     charts:

@@ -68,14 +68,6 @@ container stop uds-control-plane
 container start uds-control-plane
 ```
 
-## SSH Access
-
-If working with a remote cluster over SSH, you can forward the necessary ports:
-
-```console
-ssh -N -L 80:localhost:80 -L 443:localhost:443 -L 6443:localhost:6443 <your-remote-host>
-```
-
 ### Additional Details and Documentation
 
 - [UDS Dev Stack](docs/DEV-STACK.md)

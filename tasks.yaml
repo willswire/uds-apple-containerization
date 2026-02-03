@@ -66,7 +66,4 @@ tasks:
   - name: validate-zarf-init
     actions:
       - description: Validate zarf init
-        cmd: |
-          set -e
-          # Test zarf init due to containerd issue - https://github.com/defenseunicorns/zarf/issues/592
-          uds zarf init --confirm
+        cmd: uds zarf init --confirm
