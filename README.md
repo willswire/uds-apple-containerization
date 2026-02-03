@@ -19,7 +19,7 @@ To deploy the package:
 
 <!-- x-release-please-start-version -->
 
-`uds zarf package deploy oci://ghcr.io/willswire/uds-apple-containerization:0.19.4`
+`uds zarf package deploy oci://ghcr.io/willswire/uds-apple-containerization:0.9.0`
 
 <!-- x-release-please-end -->
 
