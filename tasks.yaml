@@ -10,9 +10,16 @@ tasks:
   - name: default
     description: "Runs a full build, deploy, and test of the package"
     actions:
+      - task: build-kernel
       - task: build
       - task: deploy
       - task: validate
+
+  - name: build-kernel
+    description: "Build the custom Linux kernel"
+    actions:
+      - description: "Build kernel from containerization submodule"
+        cmd: make -C containerization/kernel
 
   - name: build
     description: "Build uds-apple-containerization"

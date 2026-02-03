@@ -5,6 +5,10 @@ metadata:
   version: "0.60.1"
 
 packages:
+  - name: init
+    repository: ghcr.io/zarf-dev/packages/init
+    ref: v0.70.1
+
   - name: core-base
     repository: ghcr.io/defenseunicorns/packages/uds/core-base
     ref: 0.60.1-upstream
@@ -29,10 +33,6 @@ packages:
               path: "admission.resources.requests.cpu"
               default: "100m"
       istio-controlplane:
-        cni:
-          values:
-            - path: cni.ambient.ipv6
-              value: false
         istiod:
           variables:
             - name: ISTIOD_MEMORY_REQUEST

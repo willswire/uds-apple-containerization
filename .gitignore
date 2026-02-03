@@ -7,3 +7,5 @@ zarf-sbom
 tmp/
 zarf-config.yaml
 *.tar
+containerization/kernel/vmlinux
+containerization/kernel/source.tar.xz

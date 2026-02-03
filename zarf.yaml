@@ -75,6 +75,12 @@ components:
               # Run the kindest/node container
               # HTTP/HTTPS (80/443) are accessed directly via the container IP
               # Only the API port is forwarded to localhost
+              KERNEL="$(git rev-parse --show-toplevel)/containerization/kernel/vmlinux"
+              if [ ! -f "${KERNEL}" ]; then
+                echo "Kernel not found at ${KERNEL}. Run 'uds run build-kernel' first."
+                exit 1
+              fi
+
               container run \
                 -d \
                 --name "${NODE_NAME}" \
@@ -82,6 +88,7 @@ components:
                 -c ${ZARF_VAR_CPUS} \
                 -e KUBECONFIG=/etc/kubernetes/admin.conf \
                 -p 127.0.0.1:${ZARF_VAR_API_PORT}:6443 \
+                -k "${KERNEL}" \
                 ${ZARF_VAR_NODE_IMAGE}
 
               # Enable IP forwarding (container run lacks --sysctl)

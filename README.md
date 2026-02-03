@@ -37,6 +37,7 @@ After deployment, the container IP is printed. Use it to start the forwarders:
 
 ```bash
 # Replace NODE_IP with the container IP shown after deployment (e.g. 192.168.64.18)
+sudo true;
 sudo socat TCP-LISTEN:443,bind=127.0.0.1,reuseaddr,fork TCP:NODE_IP:443 &
 sudo socat TCP-LISTEN:80,bind=127.0.0.1,reuseaddr,fork TCP:NODE_IP:80 &
 ```
@@ -49,6 +50,18 @@ sudo killall socat
 
 > [!NOTE]
 > Install socat with `brew install socat` if not already available. The forwarders must be restarted after `container rm` and re-deploy (since the container IP may change).
+
+## Custom Kernel
+
+This package uses a custom Linux kernel built from the [Apple Containerization](https://github.com/apple/containerization) framework's kernel configuration (included as a git submodule). This is required because the kernel shipped with the current Containerization framework release lacks `ip6tables` support needed by Istio CNI ambient mode.
+
+After cloning (with `--recurse-submodules`), build the kernel before deploying:
+
+```bash
+uds run build-kernel
+```
+
+This produces `containerization/kernel/vmlinux`, which is automatically used when creating the cluster.
 
 ## Remove
 
