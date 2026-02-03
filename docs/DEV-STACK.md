@@ -1,6 +1,6 @@
 # UDS Dev Stack
 
-This page documents the developer-focused stack that `uds-k3d` installs to make a single-node k3d cluster behave like a realistic UDS environment.
+This page documents the developer-focused stack that this package installs to make a single-node cluster behave like a realistic UDS environment.
 
 ## What is provided
 
@@ -8,7 +8,7 @@ The UDS Dev Stack provides a number of components to support realistic and simpl
 
 Full list of components:
 
-- **MetalLB (controller + IP pool)** — Satisfies Istio LoadBalancer services’ need for routable IPs inside k3d.
+- **MetalLB (controller + IP pool)** — Satisfies Istio LoadBalancer services' need for routable IPs inside the cluster.
 
 - **NGINX DaemonSet (TLS SNI routing)** — Routes incoming traffic based on TLS SNI to the correct MetalLB IPs for admin/tenant (and optional) gateways.
 
@@ -32,7 +32,7 @@ Full list of components:
   - `passthrough.enabled` plus `passthrough.subdomains` and matching CoreDNS rewrites enable passthrough scenarios.
 
 - **MetalLB IP range**
-  - `metallb.ipAddressPool` is set from the computed `BASE_IP` based on the Docker network by default, but can be overridden in chart values to specify a custom range.
+  - `metallb.ipAddressPool` is set from the computed `BASE_IP` based on the node's virtual network by default, but can be overridden in chart values to specify a custom range.
 
 - **MinIO Buckets/Users**
   - The upstream MinIO chart provides a number of values to customize buckets and users, as well as API driven ways to interact with the server.

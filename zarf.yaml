@@ -2,9 +2,9 @@
 
 kind: ZarfPackageConfig
 metadata:
-  name: uds-k3d
-  description: "UDS K3d Cluster Setup. WARNING: This will destroy the cluster if it already exists."
-  url: https://github.com/defenseunicorns/uds-k3d
+  name: uds-apple-containerization
+  description: "UDS Cluster Setup using Apple Containerization framework. WARNING: This will destroy the cluster if it already exists."
+  url: https://github.com/willswire/uds-apple-containerization
   yolo: true
   # x-release-please-start-version
   version: "0.19.4"
@@ -15,24 +15,24 @@ variables:
     description: "Name of the cluster"
     default: "uds"
 
-  - name: K3D_IMAGE
-    description: "K3d image to use"
-    default: "rancher/k3s:v1.34.3-k3s1"
+  - name: NODE_IMAGE
+    description: "Container image to use for the cluster node"
+    default: "docker.io/kindest/node:v1.34.0@sha256:7416a61b42b1662ca6ca89f02028ac133a309a2a30ba309614e8ec94d976dc5a"
 
-  - name: K3D_ULIMIT_NOFILE
-    description: "Set ulimit for the number of files (nofile) to container runtime (Format: SOFT:HARD)"
-    default: "1048576:1048576"
+  - name: MEMORY
+    description: "Memory allocation for the container (e.g. 8G, 16G)"
+    default: "16G"
 
-  - name: K3D_EXTRA_ARGS
-    description: "Optionally pass k3d arguments to the default"
-    default: ""
+  - name: CPUS
+    description: "Number of CPUs to allocate to the container"
+    default: "6"
 
-  - name: K3D_DEBUG
-    description: "Enable debug mode for k3d"
-    default: "false"
+  - name: POD_CIDR
+    description: "Pod network CIDR for kubeadm"
+    default: "10.244.0.0/16"
 
   - name: NGINX_EXTRA_PORTS
-    description: "Optionally allow more ports through Nginx (combine with K3D_EXTRA_ARGS '-p <port>:<port>@server:*')"
+    description: "Optionally allow more ports through Nginx"
     default: "[]"
 
   - name: DOMAIN
@@ -42,21 +42,9 @@ variables:
   - name: ADMIN_DOMAIN
     description: "Domain for admin services, defaults to `admin.DOMAIN`"
 
-  - name: K3D_API_PORT
+  - name: API_PORT
     description: "Kubernetes API server port for the cluster"
-    default: "6550"
-
-  - name: K3D_HTTP_PORT
-    description: "HTTP port mapping for the cluster"
-    default: "80"
-
-  - name: K3D_HTTPS_PORT
-    description: "HTTPS port mapping for the cluster"
-    default: "443"
-
-  - name: K3D_NETWORK
-    description: "Network to join k3d cluster to"
-    default: ""
+    default: "6443"
 
 components:
   - name: destroy-cluster
@@ -65,96 +53,73 @@ components:
     actions:
       onDeploy:
         before:
-          - cmd: k3d cluster delete ${ZARF_VAR_CLUSTER_NAME}
+          - cmd: container rm -f ${ZARF_VAR_CLUSTER_NAME}-control-plane || true
             description: "Destroy the cluster"
-
-  - name: k3d-airgap-images
-    required: true
-    only:
-      flavor: airgap
-    description: "Load the airgap images for k3d into Docker"
-    import:
-      path: airgap/k3d
-      name: k3d-airgap-images
-
-  - name: create-cluster-airgap
-    required: true
-    only:
-      flavor: airgap
-    actions:
-      onDeploy:
-        before:
-          - cmd: |
-              echo ""
-              echo "###################################################"
-              echo "#                                                 #"
-              echo "#      PACKAGE BEING DEPLOYED IN AIRGAP MODE      #"
-              echo "#    THIS IS NOT MEANT TO BE USED IN PRODUCTION   #"
-              echo "#                                                 #"
-              echo "###################################################"
-              echo ""
-          - cmd: echo "true"
-            description: "Set AIRGAP_MODE to true"
-            mute: true
-            setVariables:
-              - name: AIRGAP_MODE
 
   - name: create-cluster
     required: true
-    description: "Create the k3d cluster"
+    description: "Create the Kubernetes cluster using Apple Containerization framework"
     actions:
       onDeploy:
         before:
           - cmd: |
-              k3d_version=$(k3d version | grep -E -o "([0-9]+\.?){3}$")
-              required_version="5.7.1"
-              if ! printf "$required_version\n$k3d_version" | sort -V -c 2>/dev/null; then
-                echo "This package requires a minimum k3d version of $required_version"
-                echo "Please upgrade k3d (https://k3d.io/stable/#install-current-latest-release) and try again"
+              if ! command -v container &> /dev/null; then
+                echo "The 'container' CLI from Apple's Containerization framework is required."
+                echo "See: https://github.com/apple/containerization"
                 exit 1
               fi
-            description: "Check k3d version compatibility"
+              REQUIRED="0.8.0"
+              CURRENT=$(container --version | awk '{print $NF}')
+              if [ "$(printf '%s\n' "${REQUIRED}" "${CURRENT}" | sort -V | head -n1)" != "${REQUIRED}" ]; then
+                echo "container CLI version ${REQUIRED} or later is required (found ${CURRENT})"
+                exit 1
+              fi
+            description: "Check container CLI availability"
           - cmd: |
-              VOLUME_MOUNT=""
-              if [ "${ZARF_VAR_AIRGAP_MODE}" = "true" ]; then
-                # renovate: datasource=docker depName=ghcr.io/k3d-io/k3d-tools
-                export K3D_HELPER_IMAGE_TAG=5.8.3
-                VOLUME_MOUNT="--volume k3s-airgap-images:/var/lib/rancher/k3s/agent/images"
+              NODE_NAME="${ZARF_VAR_CLUSTER_NAME}-control-plane"
+
+              # Run the kindest/node container
+              # HTTP/HTTPS (80/443) are accessed directly via the container IP
+              # Only the API port is forwarded to localhost
+              KERNEL="$(git rev-parse --show-toplevel)/containerization/kernel/vmlinux"
+              if [ ! -f "${KERNEL}" ]; then
+                echo "Kernel not found at ${KERNEL}. Run 'uds run build-kernel' first."
+                exit 1
               fi
-              DEBUG_FLAGS=""
-              if [ "${ZARF_VAR_K3D_DEBUG}" = "true" ]; then
-                DEBUG_FLAGS="--verbose --k3s-arg --kubelet-arg=container-log-max-files=10@server:* --k3s-arg --kubelet-arg=container-log-max-size=100Mi@server:* --k3s-arg --debug@server:*"
-              fi
-              HTTP_PORT=""
-              if [ -n "${ZARF_VAR_K3D_HTTP_PORT}" ]; then
-                HTTP_PORT="-p ${ZARF_VAR_K3D_HTTP_PORT}:80@server:*"
-              fi
-              HTTPS_PORT=""
-              if [ -n "${ZARF_VAR_K3D_HTTPS_PORT}" ]; then
-                HTTPS_PORT="-p ${ZARF_VAR_K3D_HTTPS_PORT}:443@server:*"
-              fi
-              NETWORK=""
-              if [ -n "${ZARF_VAR_K3D_NETWORK}" ]; then
-                NETWORK="--network ${ZARF_VAR_K3D_NETWORK}"
-              fi
-              k3d cluster create \
-                ${HTTP_PORT} \
-                ${HTTPS_PORT} \
-                --api-port ${ZARF_VAR_K3D_API_PORT} \
-                --runtime-ulimit nofile="${ZARF_VAR_K3D_ULIMIT_NOFILE}" \
-                --k3s-arg "--disable=traefik@server:*" \
-                --k3s-arg "--disable=metrics-server@server:*" \
-                --k3s-arg "--disable=servicelb@server:*" \
-                --k3s-arg "--disable=local-storage@server:*" \
-                --image ${ZARF_VAR_K3D_IMAGE} \
-                ${ZARF_VAR_K3D_EXTRA_ARGS} \
-                ${NETWORK} \
-                ${DEBUG_FLAGS} \
-                ${VOLUME_MOUNT} \
-                ${ZARF_VAR_CLUSTER_NAME}
+
+              container run \
+                -d \
+                --name "${NODE_NAME}" \
+                -m ${ZARF_VAR_MEMORY} \
+                -c ${ZARF_VAR_CPUS} \
+                -e KUBECONFIG=/etc/kubernetes/admin.conf \
+                -p 127.0.0.1:${ZARF_VAR_API_PORT}:6443 \
+                -k "${KERNEL}" \
+                ${ZARF_VAR_NODE_IMAGE}
+
+              # Enable IP forwarding (container run lacks --sysctl)
+              container exec "${NODE_NAME}" sysctl -w net.ipv4.ip_forward=1
+
+              # Initialize the cluster with kubeadm
+              container exec "${NODE_NAME}" kubeadm init \
+                --pod-network-cidr=${ZARF_VAR_POD_CIDR} \
+                --apiserver-cert-extra-sans=127.0.0.1
+
+              # Install kindnet CNI
+              container exec "${NODE_NAME}" sh -euc \
+                "sed -e 's@{{ .PodSubnet }}@${ZARF_VAR_POD_CIDR}@' /kind/manifests/default-cni.yaml | kubectl apply -f -"
+
+              # Remove control-plane taint for single-node scheduling
+              container exec "${NODE_NAME}" kubectl taint nodes --all node-role.kubernetes.io/control-plane- || true
+
+              # Extract kubeconfig (no container cp exists yet)
+              mkdir -p ~/.kube
+              container exec "${NODE_NAME}" cat /etc/kubernetes/admin.conf > ~/.kube/config
+
+              # Patch kubeconfig server address to use forwarded port
+              sed -i '' "s|server: https://.*:6443|server: https://127.0.0.1:${ZARF_VAR_API_PORT}|" ~/.kube/config
             description: "Create the cluster"
         onSuccess:
-          # Wait for CoreDNS to be available. This allows slow internet connections to complete before we move on and try to connect to a cluster that may or may not be ready to accept connections. CoreDNS is a deployment we can trust will always be there.
           - wait:
               cluster:
                 kind: Pod
@@ -163,24 +128,22 @@ components:
                 namespace: kube-system
             description: "Wait for CoreDNS to be ready"
           - cmd: |
-              echo "You can access this cluster over SSH:"
-              echo "ssh -N -L ${ZARF_VAR_K3D_HTTP_PORT}:localhost:${ZARF_VAR_K3D_HTTP_PORT} -L ${ZARF_VAR_K3D_HTTPS_PORT}:localhost:${ZARF_VAR_K3D_HTTPS_PORT} -L ${ZARF_VAR_K3D_API_PORT}:localhost:${ZARF_VAR_K3D_API_PORT} user@remote-host"
+              NODE_NAME="${ZARF_VAR_CLUSTER_NAME}-control-plane"
+              NODE_IP=$(container inspect "${NODE_NAME}" 2>/dev/null | grep -o '"ipv4Address":"[^"]*"' | head -1 | cut -d'"' -f4 | cut -d'/' -f1)
               echo
-              echo "To get the kubeconfig:"
-              echo "k3d kubeconfig get ${ZARF_VAR_CLUSTER_NAME}"
+              echo "Cluster is ready!"
               echo
-              echo "This cluster can be destroyed with:"
-              echo "k3d cluster delete ${ZARF_VAR_CLUSTER_NAME}"
-            description: "Print out information about how to access the cluster remotely"
-
-  - name: uds-dev-stack-airgap-images
-    required: true
-    only:
-      flavor: airgap
-    description: "Load the airgap images for uds-dev-stack into Docker"
-    import:
-      path: airgap/uds-dev-stack
-      name: uds-dev-stack-airgap-images
+              echo "  Node IP:      ${NODE_IP}"
+              echo "  API server:   https://127.0.0.1:${ZARF_VAR_API_PORT}"
+              echo "  HTTP/HTTPS:   http://${NODE_IP} / https://${NODE_IP}"
+              echo "  Kubeconfig:   ~/.kube/config"
+              echo
+              echo "To route *.uds.dev to this cluster (requires socat):"
+              echo "  sudo socat TCP-LISTEN:443,bind=127.0.0.1,reuseaddr,fork TCP:${NODE_IP}:443 &"
+              echo "  sudo socat TCP-LISTEN:80,bind=127.0.0.1,reuseaddr,fork TCP:${NODE_IP}:80 &"
+              echo
+              echo "Destroy with: container rm -f ${NODE_NAME}"
+            description: "Print cluster access information"
 
   - name: uds-dev-stack
     required: true
@@ -193,8 +156,40 @@ components:
             setVariables:
               - name: BASE_IP
         after:
-          - cmd: ./zarf tools kubectl rollout restart deployment coredns -n kube-system
-            description: "Restart CoreDNS to pick up internal DNS override for uds.dev"
+          - cmd: |
+              ./zarf tools kubectl -n kube-system patch configmap coredns --type merge -p '{
+                "data": {
+                  "Corefile": ".:53 {\n    errors\n    health {\n       lameduck 5s\n    }\n    ready\n    kubernetes cluster.local in-addr.arpa ip6.arpa {\n       pods insecure\n       fallthrough in-addr.arpa ip6.arpa\n       ttl 30\n    }\n    prometheus :9153\n    forward . /etc/resolv.conf {\n       max_concurrent 1000\n    }\n    cache 30 {\n       disable success cluster.local\n       disable denial cluster.local\n    }\n    loop\n    reload\n    loadbalance\n    import /etc/coredns/custom/*.override\n}\n"
+                }
+              }'
+            description: "Patch CoreDNS Corefile to import custom overrides"
+          - cmd: |
+              # Add the coredns-custom configmap as a volume to the CoreDNS deployment
+              ./zarf tools kubectl -n kube-system patch deployment coredns --type json -p '[
+                {
+                  "op": "add",
+                  "path": "/spec/template/spec/volumes/-",
+                  "value": {
+                    "name": "custom-config-volume",
+                    "configMap": {
+                      "name": "coredns-custom",
+                      "optional": true
+                    }
+                  }
+                },
+                {
+                  "op": "add",
+                  "path": "/spec/template/spec/containers/0/volumeMounts/-",
+                  "value": {
+                    "name": "custom-config-volume",
+                    "mountPath": "/etc/coredns/custom",
+                    "readOnly": true
+                  }
+                }
+              ]'
+            description: "Mount coredns-custom configmap into CoreDNS pods"
+          - cmd: ./zarf tools kubectl rollout status deployment coredns -n kube-system --timeout=60s
+            description: "Wait for CoreDNS rollout to complete"
     charts:
       - name: metallb
         namespace: kube-system

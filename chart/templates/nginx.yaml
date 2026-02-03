@@ -76,23 +76,12 @@ data:
     }
 
     http {
-      # Redirect server block
       server {
           listen 80;
           server_name _;
           return 301 https://$host$request_uri;
       }
-
-      # The unprivileged nginx image requires the tmp paths to be in /tmp (https://github.com/nginx/docker-nginx-unprivileged)
-      client_body_temp_path /tmp/client_temp;
-      proxy_temp_path       /tmp/proxy_temp_path;
-      fastcgi_temp_path     /tmp/fastcgi_temp;
-      uwsgi_temp_path       /tmp/uwsgi_temp;
-      scgi_temp_path        /tmp/scgi_temp;
     }
-
-    # The unprivileged nginx image requires the PID to be in /tmp (https://github.com/nginx/docker-nginx-unprivileged)
-    pid /tmp/nginx.pid;
 
     error_log /dev/stderr;
     
@@ -112,18 +101,17 @@ spec:
         name: nginx
         sidecar.istio.io/inject: "false"
     spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       containers:
         - name: nginx
           image: {{ .Values.images.nginx.repository }}:{{ .Values.images.nginx.tag }}
           command: ["nginx", "-g", "daemon off;"]
           ports:
             - containerPort: 80
-              hostPort: 80
             - containerPort: 443
-              hostPort: 443
           {{- range .Values.extraPorts }}
             - containerPort: {{ . }}
-              hostPort: {{ . }}
           {{- end }}
           volumeMounts:
             - name: config-volume

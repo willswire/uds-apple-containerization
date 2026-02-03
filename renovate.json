@@ -28,10 +28,7 @@
       ],
       "groupName": "dev-stack",
       "commitMessageTopic": "dev-stack",
-      "matchPackageNames": [
-        "!rancher/k3s",
-        "!defenseunicorns/uds-common"
-      ]
+      "matchPackageNames": ["!defenseunicorns/uds-common"]
     }
   ]
 }
