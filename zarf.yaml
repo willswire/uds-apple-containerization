@@ -23,6 +23,35 @@ variables:
     description: "Domain for admin services, defaults to `admin.DOMAIN`"
 
 components:
+  - name: create-cluster
+    required: true
+    description: "Create the Kubernetes cluster using the cluster CLI"
+    actions:
+      onDeploy:
+        before:
+          - cmd: |
+              if ! command -v cluster &> /dev/null; then
+                echo "The 'cluster' CLI is required."
+                exit 1
+              fi
+            description: "Check cluster CLI availability"
+          - cmd: cluster create --replace
+            description: "Create the cluster"
+        onSuccess:
+          - cmd: |
+              KUBECONFIG_PATHS="${KUBECONFIG:-$HOME/.kube/config}"
+              TARGET_KUBECONFIG="${KUBECONFIG_PATHS%%:*}"
+              mkdir -p "$(dirname "${TARGET_KUBECONFIG}")"
+              cluster kubeconfig --kubeconfig "${TARGET_KUBECONFIG}"
+            description: "Write kubeconfig for the cluster"
+          - wait:
+              cluster:
+                kind: Pod
+                condition: Ready
+                name: "k8s-app=kube-dns"
+                namespace: kube-system
+            description: "Wait for CoreDNS to be ready"
+
   - name: uds-dev-stack
     required: true
     description: "Install MetalLB, NGINX, Minio, local-path-rwx and Ensure MachineID to meet UDS developer needs without later config changes"

@@ -49,7 +49,7 @@ sudo killall socat
 ```
 
 > [!NOTE]
-> Install socat with `brew install socat` if not already available. The forwarders must be restarted after `cluster delete` and re-deploy (since the node IP may change).
+> Install socat with `brew install socat` if not already available. The forwarders must be restarted after a cluster recreate (since the node IP may change).
 
 ## CoreDNS Overrides
 
@@ -64,18 +64,18 @@ The patches live in:
 
 To delete your cluster:
 
-`cluster delete --name uds` (where `uds` is the default cluster name)
+`cluster delete`
 
 ## Start and Stop
 
 To stop and start an existing cluster gracefully, use the following prior to host hibernation, suspension, restart, or shutoff:
 
 ```bash
-# to stop the default UDS cluster
-cluster stop --name uds
+# to stop the cluster
+cluster stop
 
-# to start the default UDS cluster
-cluster start --name uds
+# to start the cluster
+cluster start
 ```
 
 ### Additional Details and Documentation
