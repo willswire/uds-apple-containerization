@@ -3,7 +3,7 @@
 kind: ZarfPackageConfig
 metadata:
   name: uds-apple-containerization
-  description: "UDS Cluster Setup using Apple Containerization framework. WARNING: This will destroy the cluster if it already exists."
+  description: "UDS Cluster Setup using the cluster CLI. WARNING: This will destroy the cluster if it already exists."
   url: https://github.com/willswire/uds-apple-containerization
   yolo: true
   # x-release-please-start-version
@@ -11,26 +11,6 @@ metadata:
   # x-release-please-end
 
 variables:
-  - name: CLUSTER_NAME
-    description: "Name of the cluster"
-    default: "uds"
-
-  - name: NODE_IMAGE
-    description: "Container image to use for the cluster node"
-    default: "docker.io/kindest/node:v1.34.0@sha256:7416a61b42b1662ca6ca89f02028ac133a309a2a30ba309614e8ec94d976dc5a"
-
-  - name: MEMORY
-    description: "Memory allocation for the container (e.g. 8G, 16G)"
-    default: "16G"
-
-  - name: CPUS
-    description: "Number of CPUs to allocate to the container"
-    default: "6"
-
-  - name: POD_CIDR
-    description: "Pod network CIDR for kubeadm"
-    default: "10.244.0.0/16"
-
   - name: NGINX_EXTRA_PORTS
     description: "Optionally allow more ports through Nginx"
     default: "[]"
@@ -42,108 +22,28 @@ variables:
   - name: ADMIN_DOMAIN
     description: "Domain for admin services, defaults to `admin.DOMAIN`"
 
-  - name: API_PORT
-    description: "Kubernetes API server port for the cluster"
-    default: "6443"
-
 components:
-  - name: destroy-cluster
-    required: true
-    description: "Optionally destroy the cluster before creating it"
-    actions:
-      onDeploy:
-        before:
-          - cmd: container rm -f ${ZARF_VAR_CLUSTER_NAME}-control-plane || true
-            description: "Destroy the cluster"
-
   - name: create-cluster
     required: true
-    description: "Create the Kubernetes cluster using Apple Containerization framework"
+    description: "Create the Kubernetes cluster using the cluster CLI"
     actions:
       onDeploy:
         before:
           - cmd: |
-              if ! command -v container &> /dev/null; then
-                echo "The 'container' CLI from Apple's Containerization framework is required."
-                echo "See: https://github.com/apple/containerization"
+              if ! command -v cluster &> /dev/null; then
+                echo "The 'cluster' CLI is required."
                 exit 1
               fi
-              REQUIRED="0.8.0"
-              CURRENT=$(container --version | awk '{print $NF}')
-              if [ "$(printf '%s\n' "${REQUIRED}" "${CURRENT}" | sort -V | head -n1)" != "${REQUIRED}" ]; then
-                echo "container CLI version ${REQUIRED} or later is required (found ${CURRENT})"
-                exit 1
-              fi
-            description: "Check container CLI availability"
+            description: "Check cluster CLI availability"
+          - cmd: cluster create --replace
+            description: "Create the cluster"
+        onSuccess:
           - cmd: |
-              NODE_NAME="${ZARF_VAR_CLUSTER_NAME}-control-plane"
-
-              # Run the kindest/node container
-              # HTTP/HTTPS (80/443) are accessed directly via the container IP
-              # Only the API port is forwarded to localhost
-              KERNEL="$(git rev-parse --show-toplevel)/containerization/kernel/vmlinux"
-              if [ ! -f "${KERNEL}" ]; then
-                echo "Kernel not found at ${KERNEL}. Run 'uds run build-kernel' first."
-                exit 1
-              fi
-
-              container run \
-                -d \
-                --name "${NODE_NAME}" \
-                -m ${ZARF_VAR_MEMORY} \
-                -c ${ZARF_VAR_CPUS} \
-                -e KUBECONFIG=/etc/kubernetes/admin.conf \
-                -p 127.0.0.1:${ZARF_VAR_API_PORT}:6443 \
-                -k "${KERNEL}" \
-                ${ZARF_VAR_NODE_IMAGE}
-
-              # Enable IP forwarding (container run lacks --sysctl)
-              container exec "${NODE_NAME}" sysctl -w net.ipv4.ip_forward=1
-
-              # Initialize the cluster with kubeadm
-              container exec "${NODE_NAME}" kubeadm init \
-                --pod-network-cidr=${ZARF_VAR_POD_CIDR} \
-                --apiserver-cert-extra-sans=127.0.0.1
-
-              # Install kindnet CNI
-              container exec "${NODE_NAME}" sh -euc \
-                "sed -e 's@{{ .PodSubnet }}@${ZARF_VAR_POD_CIDR}@' /kind/manifests/default-cni.yaml | kubectl apply -f -"
-
-              # Remove control-plane taint for single-node scheduling
-              container exec "${NODE_NAME}" kubectl taint nodes --all node-role.kubernetes.io/control-plane- || true
-
-              # Extract kubeconfig (no container cp exists yet)
-              KUBECONFIG_RAW="$(mktemp)"
-              container exec "${NODE_NAME}" cat /etc/kubernetes/admin.conf > "${KUBECONFIG_RAW}"
-
-              # Patch kubeconfig server address to use forwarded port
-              sed -i '' "s|server: https://.*:6443|server: https://127.0.0.1:${ZARF_VAR_API_PORT}|" "${KUBECONFIG_RAW}"
-
-              # Rename kubeconfig entries to a stable cluster name
-              sed -i '' \
-                -e 's/name: kubernetes-admin@kubernetes$/name: uds/' \
-                -e 's/name: kubernetes-admin$/name: admin/' \
-                -e 's/name: kubernetes$/name: uds/' \
-                -e 's/cluster: kubernetes$/cluster: uds/' \
-                -e 's/user: kubernetes-admin$/user: admin/' \
-                "${KUBECONFIG_RAW}"
-
-              # Append kubeconfig instead of clobbering
               KUBECONFIG_PATHS="${KUBECONFIG:-$HOME/.kube/config}"
               TARGET_KUBECONFIG="${KUBECONFIG_PATHS%%:*}"
               mkdir -p "$(dirname "${TARGET_KUBECONFIG}")"
-
-              if ./zarf tools kubectl --kubeconfig "${TARGET_KUBECONFIG}" config get-contexts "uds" >/dev/null 2>&1; then
-                KUBECONFIG="${TARGET_KUBECONFIG}" ./zarf tools kubectl config use-context "uds"
-              else
-                printf "\n" >> "${TARGET_KUBECONFIG}" || true
-                cat "${KUBECONFIG_RAW}" >> "${TARGET_KUBECONFIG}"
-                KUBECONFIG="${TARGET_KUBECONFIG}" ./zarf tools kubectl config use-context "uds"
-              fi
-
-              rm -f "${KUBECONFIG_RAW}"
-            description: "Create the cluster"
-        onSuccess:
+              cluster kubeconfig --kubeconfig "${TARGET_KUBECONFIG}"
+            description: "Write kubeconfig for the cluster"
           - wait:
               cluster:
                 kind: Pod
@@ -151,25 +51,6 @@ components:
                 name: "k8s-app=kube-dns"
                 namespace: kube-system
             description: "Wait for CoreDNS to be ready"
-          - cmd: |
-              NODE_NAME="${ZARF_VAR_CLUSTER_NAME}-control-plane"
-              NODE_IP=$(container inspect "${NODE_NAME}" 2>/dev/null | grep -o '"ipv4Address":"[^"]*"' | head -1 | cut -d'"' -f4 | cut -d'/' -f1)
-              KUBECONFIG_PATHS="${KUBECONFIG:-$HOME/.kube/config}"
-              TARGET_KUBECONFIG="${KUBECONFIG_PATHS%%:*}"
-              echo
-              echo "Cluster is ready!"
-              echo
-              echo "  Node IP:      ${NODE_IP}"
-              echo "  API server:   https://127.0.0.1:${ZARF_VAR_API_PORT}"
-              echo "  HTTP/HTTPS:   http://${NODE_IP} / https://${NODE_IP}"
-              echo "  Kubeconfig:   ${TARGET_KUBECONFIG}"
-              echo
-              echo "To route *.uds.dev to this cluster (requires socat):"
-              echo "  sudo socat TCP-LISTEN:443,bind=127.0.0.1,reuseaddr,fork TCP:${NODE_IP}:443 &"
-              echo "  sudo socat TCP-LISTEN:80,bind=127.0.0.1,reuseaddr,fork TCP:${NODE_IP}:80 &"
-              echo
-              echo "Destroy with: container rm -f ${NODE_NAME}"
-            description: "Print cluster access information"
 
   - name: uds-dev-stack
     required: true
@@ -183,36 +64,10 @@ components:
               - name: BASE_IP
         after:
           - cmd: |
-              ./zarf tools kubectl -n kube-system patch configmap coredns --type merge -p '{
-                "data": {
-                  "Corefile": ".:53 {\n    errors\n    health {\n       lameduck 5s\n    }\n    ready\n    kubernetes cluster.local in-addr.arpa ip6.arpa {\n       pods insecure\n       fallthrough in-addr.arpa ip6.arpa\n       ttl 30\n    }\n    prometheus :9153\n    forward . /etc/resolv.conf {\n       max_concurrent 1000\n    }\n    cache 30 {\n       disable success cluster.local\n       disable denial cluster.local\n    }\n    loop\n    reload\n    loadbalance\n    import /etc/coredns/custom/*.override\n}\n"
-                }
-              }'
+              ./zarf tools kubectl -n kube-system patch configmap coredns --type merge --patch-file manifests/coredns-corefile-import-patch.yaml
             description: "Patch CoreDNS Corefile to import custom overrides"
           - cmd: |
-              # Add the coredns-custom configmap as a volume to the CoreDNS deployment
-              ./zarf tools kubectl -n kube-system patch deployment coredns --type json -p '[
-                {
-                  "op": "add",
-                  "path": "/spec/template/spec/volumes/-",
-                  "value": {
-                    "name": "custom-config-volume",
-                    "configMap": {
-                      "name": "coredns-custom",
-                      "optional": true
-                    }
-                  }
-                },
-                {
-                  "op": "add",
-                  "path": "/spec/template/spec/containers/0/volumeMounts/-",
-                  "value": {
-                    "name": "custom-config-volume",
-                    "mountPath": "/etc/coredns/custom",
-                    "readOnly": true
-                  }
-                }
-              ]'
+              ./zarf tools kubectl -n kube-system patch deployment coredns --type strategic --patch-file manifests/coredns-deployment-patch.yaml
             description: "Mount coredns-custom configmap into CoreDNS pods"
           - cmd: ./zarf tools kubectl rollout status deployment coredns -n kube-system --timeout=60s
             description: "Wait for CoreDNS rollout to complete"

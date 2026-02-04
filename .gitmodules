@@ -1,3 +1,0 @@
-[submodule "containerization"]
-	path = containerization
-	url = https://github.com/apple/containerization.git
