@@ -1,31 +1,10 @@
-variables:
-  - name: VERSION
-    default: "v1.34.0"
-  - name: IMAGE_NAME
-    default: "docker.io/kindest/node"
-  - name: NGINX_EXTRA_PORTS
-    default: "[]"
-
 tasks:
   - name: default
     description: "Runs a full build, deploy, and test of the package"
     actions:
-      - task: build-kernel
       - task: build
       - task: deploy
       - task: validate
-
-  - name: build-kernel
-    description: "Build the custom Linux kernel if it does not exist"
-    actions:
-      - description: "Check for existing kernel build"
-        cmd: |
-          if [ -d containerization/kernel ]; then
-            echo "Kernel build found. Skipping build..."
-          else
-            echo "Kernel build not found! Building..."
-            make -C containerization/kernel
-          fi
 
   - name: build
     description: "Build uds-apple-containerization"
@@ -38,10 +17,7 @@ tasks:
     actions:
       - description: "Deploy UDS Apple Containerization package"
         cmd: |
-          uds zarf package deploy zarf-package-uds-apple-containerization-arm64-*.tar.zst \
-            --set NODE_IMAGE=${IMAGE_NAME}:${VERSION} \
-            --set NGINX_EXTRA_PORTS="${NGINX_EXTRA_PORTS}" \
-            --confirm
+          uds zarf package deploy zarf-package-uds-apple-containerization-arm64-*.tar.zst --confirm
 
   - name: validate
     actions:

@@ -3,7 +3,7 @@
 > [!IMPORTANT]
 > This package should only be used for development and testing purposes. It is not intended for production use and all data is overwritten when the package is re-deployed.
 
-This zarf package serves as a development and test environment for testing [UDS Core](https://github.com/defenseunicorns/uds-core), individual UDS Capabilities, and UDS capabilities aggregated via the [UDS CLI](https://github.com/defenseunicorns/uds-cli). It uses Apple's [Containerization](https://github.com/apple/containerization) framework to run a Kubernetes cluster on macOS.
+This zarf package serves as a development and test environment for testing [UDS Core](https://github.com/defenseunicorns/uds-core), individual UDS Capabilities, and UDS capabilities aggregated via the [UDS CLI](https://github.com/defenseunicorns/uds-cli). It uses the `cluster` CLI (backed by Apple's [Containerization](https://github.com/apple/containerization) framework) to run a Kubernetes cluster on macOS.
 
 The Kubernetes API is forwarded to `localhost:6443`. HTTP/HTTPS (ports 80/443) are served on the container's IP address, which is printed after deployment.
 
@@ -14,11 +14,9 @@ The Kubernetes API is forwarded to `localhost:6443`. HTTP/HTTPS (ports 80/443) a
 brew install container
 container system start --enable-kernel-install
 
-# Pull the containerization framework git submodule for building a custom kernel
-git submodule update --init --recursive
+# Ensure the `cluster` CLI is installed and on your PATH
 
 # Run the default UDS task which will:
-# - Build the custom kernel
 # - Build the dev package
 # - Deploy the dev package
 # - Validate the cluster by performing a Zarf init
@@ -34,10 +32,10 @@ uds deploy --confirm uds-bundle-core-slim-dev-arm64-0.60.1.tar.zst
 
 `*.uds.dev` resolves to `127.0.0.1` via public DNS. To route this traffic to the cluster for Istio SNI-based routing, use `socat` to forward ports 80 and 443 from localhost to the container's IP.
 
-After deployment, you can dynamically fetch the container IP and start the forwarders like this:
+After deployment, you can dynamically fetch the node IP and start the forwarders like this:
 
 ```bash
-NODE_IP="$(container list --format json | jq -r '.[] | select(.configuration.id=="uds-control-plane") | .networks[0].ipv4Address | split("/")[0]')"
+NODE_IP="$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type==\"InternalIP\")].address}')"
 
 sudo true;
 sudo socat TCP-LISTEN:443,bind=127.0.0.1,reuseaddr,fork TCP:${NODE_IP}:443 &
@@ -51,25 +49,22 @@ sudo killall socat
 ```
 
 > [!NOTE]
-> Install socat with `brew install socat` if not already available. The forwarders must be restarted after `container rm` and re-deploy (since the container IP may change).
+> Install socat with `brew install socat` if not already available. The forwarders must be restarted after `cluster delete` and re-deploy (since the node IP may change).
 
-## Custom Kernel
+## CoreDNS Overrides
 
-This package uses a custom Linux kernel built from the [Apple Containerization](https://github.com/apple/containerization) framework's kernel configuration (included as a git submodule). This is required because the kernel shipped with the current Containerization framework release lacks `ip6tables` support needed by Istio CNI ambient mode.
+This package patches CoreDNS to import a custom override file and mounts the `coredns-custom` ConfigMap into CoreDNS so in-cluster `*.uds.dev` names resolve to the Istio gateways instead of `127.0.0.1`.
 
-After cloning (with `--recurse-submodules`), build the kernel before deploying:
+The patches live in:
 
-```bash
-uds run build-kernel
-```
-
-This produces `containerization/kernel/vmlinux`, which is automatically used when creating the cluster.
+- `manifests/coredns-corefile-import-patch.yaml` (Corefile import)
+- `manifests/coredns-deployment-patch.yaml` (volume + mount)
 
 ## Remove
 
 To delete your cluster:
 
-`container rm -f uds-control-plane` (where `uds` is the default cluster name)
+`cluster delete --name uds` (where `uds` is the default cluster name)
 
 ## Start and Stop
 
@@ -77,10 +72,10 @@ To stop and start an existing cluster gracefully, use the following prior to hos
 
 ```bash
 # to stop the default UDS cluster
-container stop uds-control-plane
+cluster stop --name uds
 
 # to start the default UDS cluster
-container start uds-control-plane
+cluster start --name uds
 ```
 
 ### Additional Details and Documentation
